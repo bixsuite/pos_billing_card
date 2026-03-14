@@ -1,0 +1,52 @@
+[
+	{
+		"doctype": "Custom Field",
+		"name": "POS Invoice-bc_billing_card",
+		"dt": "POS Invoice",
+		"fieldname": "bc_billing_card",
+		"fieldtype": "Link",
+		"options": "Billing Card",
+		"label": "Billing Card",
+		"insert_after": "customer",
+		"in_list_view": 0,
+		"in_standard_filter": 1,
+		"read_only": 1,
+		"no_copy": 1
+	},
+	{
+		"doctype": "Custom Field",
+		"name": "POS Invoice-bc_floor",
+		"dt": "POS Invoice",
+		"fieldname": "bc_floor",
+		"fieldtype": "Data",
+		"label": "Floor",
+		"insert_after": "bc_billing_card",
+		"in_list_view": 0,
+		"read_only": 1,
+		"no_copy": 1
+	},
+	{
+		"doctype": "Custom Field",
+		"name": "Sales Invoice-bc_billing_card",
+		"dt": "Sales Invoice",
+		"fieldname": "bc_billing_card",
+		"fieldtype": "Link",
+		"options": "Billing Card",
+		"label": "Billing Card",
+		"insert_after": "customer",
+		"in_standard_filter": 1,
+		"read_only": 1,
+		"no_copy": 1
+	},
+	{
+		"doctype": "Custom Field",
+		"name": "Sales Invoice-bc_floor",
+		"dt": "Sales Invoice",
+		"fieldname": "bc_floor",
+		"fieldtype": "Data",
+		"label": "Floor",
+		"insert_after": "bc_billing_card",
+		"read_only": 1,
+		"no_copy": 1
+	}
+]

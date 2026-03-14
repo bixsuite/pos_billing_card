@@ -1,0 +1,165 @@
+{
+	"actions": [],
+	"allow_rename": 0,
+	"autoname": "field:card_number",
+	"creation": "2026-03-14 00:00:00.000000",
+	"doctype": "DocType",
+	"editable_grid": 1,
+	"engine": "InnoDB",
+	"field_order": [
+		"card_number",
+		"status",
+		"col_break_1",
+		"customer",
+		"current_invoice",
+		"section_break_session",
+		"current_floor",
+		"pos_profile",
+		"col_break_2",
+		"assigned_at",
+		"assigned_by",
+		"section_break_notes",
+		"notes"
+	],
+	"fields": [
+		{
+			"bold": 1,
+			"fieldname": "card_number",
+			"fieldtype": "Data",
+			"in_global_search": 1,
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"label": "Card Number",
+			"reqd": 1,
+			"search_index": 1,
+			"unique": 1
+		},
+		{
+			"default": "Available",
+			"fieldname": "status",
+			"fieldtype": "Select",
+			"in_filter": 1,
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"label": "Status",
+			"options": "Available\nIn Use\nDisabled",
+			"reqd": 1
+		},
+		{
+			"fieldname": "col_break_1",
+			"fieldtype": "Column Break"
+		},
+		{
+			"fieldname": "customer",
+			"fieldtype": "Link",
+			"in_list_view": 1,
+			"label": "Customer",
+			"options": "Customer"
+		},
+		{
+			"fieldname": "current_invoice",
+			"fieldtype": "Link",
+			"label": "Current Invoice",
+			"options": "POS Invoice",
+			"read_only": 1
+		},
+		{
+			"fieldname": "section_break_session",
+			"fieldtype": "Section Break",
+			"label": "Session Info"
+		},
+		{
+			"fieldname": "current_floor",
+			"fieldtype": "Data",
+			"label": "Current Floor"
+		},
+		{
+			"fieldname": "pos_profile",
+			"fieldtype": "Link",
+			"label": "POS Profile",
+			"options": "POS Profile"
+		},
+		{
+			"fieldname": "col_break_2",
+			"fieldtype": "Column Break"
+		},
+		{
+			"fieldname": "assigned_at",
+			"fieldtype": "Datetime",
+			"label": "Assigned At",
+			"read_only": 1
+		},
+		{
+			"fieldname": "assigned_by",
+			"fieldtype": "Link",
+			"label": "Assigned By",
+			"options": "User",
+			"read_only": 1
+		},
+		{
+			"fieldname": "section_break_notes",
+			"fieldtype": "Section Break",
+			"label": "Notes"
+		},
+		{
+			"fieldname": "notes",
+			"fieldtype": "Small Text",
+			"label": "Notes"
+		}
+	],
+	"icon": "fa fa-id-card",
+	"links": [],
+	"modified": "2026-03-14 00:00:00.000000",
+	"modified_by": "Administrator",
+	"module": "Pos Billing Card",
+	"name": "Billing Card",
+	"naming_rule": "By fieldname",
+	"owner": "Administrator",
+	"permissions": [
+		{
+			"create": 1,
+			"delete": 1,
+			"email": 1,
+			"export": 1,
+			"print": 1,
+			"read": 1,
+			"report": 1,
+			"role": "System Manager",
+			"share": 1,
+			"write": 1
+		},
+		{
+			"create": 1,
+			"delete": 0,
+			"read": 1,
+			"role": "Sales User",
+			"write": 1
+		},
+		{
+			"create": 1,
+			"delete": 0,
+			"read": 1,
+			"role": "Accounts User",
+			"write": 1
+		}
+	],
+	"quick_entry": 1,
+	"sort_field": "modified",
+	"sort_order": "DESC",
+	"states": [
+		{
+			"color": "Green",
+			"title": "Available"
+		},
+		{
+			"color": "Blue",
+			"title": "In Use"
+		},
+		{
+			"color": "Gray",
+			"title": "Disabled"
+		}
+	],
+	"title_field": "card_number",
+	"track_changes": 1
+}
