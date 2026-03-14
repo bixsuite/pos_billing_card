@@ -7,7 +7,7 @@
 		"fieldtype": "Link",
 		"options": "Billing Card",
 		"label": "Billing Card",
-		"insert_after": "customer",
+		"insert_after": "customer_name",
 		"in_list_view": 0,
 		"in_standard_filter": 1,
 		"read_only": 1,
@@ -33,7 +33,7 @@
 		"fieldtype": "Link",
 		"options": "Billing Card",
 		"label": "Billing Card",
-		"insert_after": "customer",
+		"insert_after": "customer_name",
 		"in_standard_filter": 1,
 		"read_only": 1,
 		"no_copy": 1

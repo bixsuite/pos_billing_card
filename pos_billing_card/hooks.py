@@ -21,6 +21,8 @@ fixtures = [
 	}
 ]
 
+after_install = "pos_billing_card.setup.after_install"
+
 # Auto-release billing card when POS Invoice is submitted via normal POSAwesome flow
 doc_events = {
 	"POS Invoice": {

@@ -33,23 +33,22 @@ Customer reaches Cash Counter
 ## Installation
 
 ```bash
-# 1. Install the app into the bench
-cd /home/bixsuite/frappe-bench
-bench pip install -e apps/pos_billing_card
+# 1. Get the app (if not already cloned)
+bench get-app pos_billing_card https://github.com/bixsuite/pos_billing_card
 
-# 2. Install on site (replace <site> with your site name, e.g. bixsuite.localhost)
+# 2. Install on site
+# This runs migrate (creates Billing Card doctype) and then applies fixtures
+# (custom fields on POS Invoice / Sales Invoice) via the after_install hook.
 bench --site <site> install-app pos_billing_card
 
-# 3. Run migrations (creates Billing Card doctype + custom fields on POS Invoice)
-bench --site <site> migrate
-
-# 4. Import fixtures (custom fields)
-bench --site <site> import-fixtures --app pos_billing_card
-
-# 5. Clear cache and rebuild
+# 3. Clear cache and rebuild assets
 bench --site <site> clear-cache
 bench build --app pos_billing_card
 ```
+
+> **Note:** Do not run `import-fixtures` manually before `install-app` — the
+> custom fields link to the Billing Card doctype, which must exist in the
+> database first. The `after_install` hook handles this automatically.
 
 ## Usage
 
