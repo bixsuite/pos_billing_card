@@ -54,12 +54,11 @@ bench build --app pos_billing_card
 
 ### Create Physical Cards
 
-Go to **Billing Card** list and create cards, or use bulk creation:
+Go to **Billing Card** list and create cards manually, or use bulk creation from the terminal:
 
-```python
-# In Frappe console
-import frappe
-frappe.call("pos_billing_card.api.billing_card_api.bulk_create_cards", count=50, prefix="BC-")
+```bash
+# Creates BC-01 … BC-50, all status "Available"
+bench --site <site> execute pos_billing_card.api.billing_card_api.bulk_create_cards --args '{"count": 50, "prefix": "BC-"}'
 ```
 
 This creates BC-01 … BC-50 with status "Available".
