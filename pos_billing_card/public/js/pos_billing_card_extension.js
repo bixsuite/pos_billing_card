@@ -373,22 +373,13 @@
 	let _activeBadgeCard = null;
 	let _badgeInterval = null;
 
-	/** Find the Customer Details container in POSAwesome's rendered DOM. */
+	/** Find the Customer Details card container in POSAwesome's rendered DOM. */
 	function findCustomerContainer() {
-		// Try common POSAwesome class selectors first
-		for (const sel of [".customer-section", "[class*='customer-detail']"]) {
-			const el = document.querySelector(sel);
-			if (el) return el;
-		}
-		// Fall back: find the "Customer Details" heading and walk up to its section
-		for (const el of document.querySelectorAll("span, div, p, label, h5, h6")) {
-			if (el.childElementCount === 0 && el.textContent.trim() === "Customer Details") {
-				return (
-					el.closest(".card-body") ||
-					el.closest("[class*='section']") ||
-					el.parentElement?.parentElement ||
-					el.parentElement
-				);
+		// POSAwesome renders: v-card.invoice-section-card > .invoice-section-heading > h3.invoice-section-heading__title
+		const headings = document.querySelectorAll("h3.invoice-section-heading__title");
+		for (const h of headings) {
+			if (h.textContent.trim() === __("Customer Details") || h.textContent.trim() === "Customer Details") {
+				return h.closest(".invoice-section-card") || h.closest(".v-card") || h.parentElement?.parentElement;
 			}
 		}
 		return null;
@@ -600,7 +591,7 @@
 		wireContentEvents(card);
 	}
 
-	function renderAssignForm(cardNumber) {
+	function renderAssignForm(_cardNumber) {
 		const posCustomer = getCurrentPosaCustomer() || "";
 		return `
 		<div class="bc-assign-form">
@@ -945,17 +936,6 @@
 	// -------------------------------------------------------------------------
 	// FAB injection
 	// -------------------------------------------------------------------------
-
-	function injectFAB() {
-		if (document.getElementById(FAB_ID)) return;
-
-		const btn = document.createElement("button");
-		btn.id = FAB_ID;
-		btn.title = "Billing Card";
-		btn.innerHTML = `<span class="bc-icon">&#x1F4B3;</span><span>Billing Card</span>`;
-		btn.addEventListener("click", openPanel);
-		document.body.appendChild(btn);
-	}
 
 	function removeFAB() {
 		document.getElementById(FAB_ID)?.remove();
