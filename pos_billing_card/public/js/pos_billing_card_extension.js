@@ -57,14 +57,37 @@
 
 	/** Returns the active POS Profile name from POSAwesome. */
 	function getCurrentPosProfile() {
-		// POSAwesome stores POS profile on the page app instance
+		const stores = getPosaStores();
+
+		// 1. Invoice doc (most reliable — set when session opens)
+		const fromInvoice = stores?.invoice?.invoiceDoc?.pos_profile;
+		if (fromInvoice) return fromInvoice;
+
+		// 2. POSAwesome posProfile store
+		const fromStore = stores?.invoice?.pos_profile
+			|| stores?.ui?.pos_profile
+			|| stores?.items?.pos_profile;
+		if (fromStore) return fromStore;
+
+		// 3. Pinia store — iterate all stores looking for pos_profile
+		try {
+			const pinia = document.querySelector(".main-section")?.__vue_app__
+				?.config?.globalProperties?.$pinia;
+			if (pinia?._s) {
+				for (const [, store] of pinia._s) {
+					if (store?.pos_profile) return store.pos_profile;
+					if (store?.posProfile) return store.posProfile;
+				}
+			}
+		} catch (_) {}
+
+		// 4. Page app instance fallback
 		try {
 			const page = frappe.get_route_info()?.page || cur_page;
 			if (page?.$PosApp?.pos_profile) return page.$PosApp.pos_profile;
 		} catch (_) {}
-		// Fallback: read from invoice store
-		const stores = getPosaStores();
-		return stores?.invoice?.invoiceDoc?.pos_profile || null;
+
+		return null;
 	}
 
 	/**
@@ -964,8 +987,7 @@
 	function initExtension() {
 		injectStyles();
 		waitForPosApp(() => {
-			injectFAB();
-			startBadgeRefresh(null); // inject idle button in customer section
+			startBadgeRefresh(null); // inject button in customer section
 			watchInvoiceStore();
 		});
 	}
