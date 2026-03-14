@@ -16,6 +16,7 @@
 	const BC_API = "pos_billing_card.api.billing_card_api";
 	const FAB_ID = "bc-fab-btn";
 	const PANEL_ID = "bc-slide-panel";
+	const BADGE_ID = "bc-pos-card-badge";
 
 	// -------------------------------------------------------------------------
 	// POSAwesome Pinia store access
@@ -275,6 +276,42 @@
 			.bc-divider { border: none; border-top: 1px solid #eceff1; margin: 14px 0; }
 
 			.bc-status-msg { font-size: 12px; color: #78909c; text-align: center; padding: 20px; }
+
+			/* Customer section badge */
+			#${BADGE_ID} {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				padding: 7px 12px;
+				margin: 8px 0 0 0;
+				background: #e3f2fd;
+				border-radius: 8px;
+				border-left: 3px solid #1565c0;
+				font-size: 13px;
+				flex-wrap: wrap;
+			}
+			#${BADGE_ID} .bc-pb-card {
+				font-weight: 700;
+				color: #1565c0;
+				display: flex;
+				align-items: center;
+				gap: 4px;
+			}
+			#${BADGE_ID} .bc-pb-floor {
+				color: #546e7a;
+				font-size: 12px;
+				display: flex;
+				align-items: center;
+				gap: 3px;
+			}
+			#${BADGE_ID} .bc-pb-open {
+				margin-left: auto;
+				font-size: 11px;
+				color: #1565c0;
+				cursor: pointer;
+				text-decoration: underline;
+				white-space: nowrap;
+			}
 		`;
 		document.head.appendChild(style);
 	}
@@ -286,6 +323,75 @@
 	let _panel = null;
 	let _overlay = null;
 	let _currentCard = null; // last scanned card data
+
+	// -------------------------------------------------------------------------
+	// Customer section badge — shows active card near Customer field in POS UI
+	// -------------------------------------------------------------------------
+
+	let _activeBadgeCard = null;
+	let _badgeInterval = null;
+
+	/** Find the Customer Details container in POSAwesome's rendered DOM. */
+	function findCustomerContainer() {
+		// Try common POSAwesome class selectors first
+		for (const sel of [".customer-section", "[class*='customer-detail']"]) {
+			const el = document.querySelector(sel);
+			if (el) return el;
+		}
+		// Fall back: find the "Customer Details" heading and walk up to its section
+		for (const el of document.querySelectorAll("span, div, p, label, h5, h6")) {
+			if (el.childElementCount === 0 && el.textContent.trim() === "Customer Details") {
+				return (
+					el.closest(".card-body") ||
+					el.closest("[class*='section']") ||
+					el.parentElement?.parentElement ||
+					el.parentElement
+				);
+			}
+		}
+		return null;
+	}
+
+	function _injectBadge() {
+		document.getElementById(BADGE_ID)?.remove();
+		if (!_activeBadgeCard) return;
+
+		const container = findCustomerContainer();
+		if (!container) return;
+
+		const card = _activeBadgeCard;
+		const badge = document.createElement("div");
+		badge.id = BADGE_ID;
+		badge.innerHTML = `
+			<span class="bc-pb-card">&#x1F4B3; ${card.card_number}</span>
+			${card.current_floor ? `<span class="bc-pb-floor">&#x1F4CD; ${card.current_floor}</span>` : ""}
+			${card.customer_name ? `<span class="bc-pb-floor" style="color:#2e7d32">&#x1F464; ${card.customer_name}</span>` : ""}
+			<span class="bc-pb-open" onclick="window._bcOpenPanel()">Open &#x2197;</span>
+		`;
+		container.appendChild(badge);
+	}
+
+	/** Show / update the badge for an active card. */
+	function startBadgeRefresh(card) {
+		_activeBadgeCard = card && card.status === "In Use" ? card : null;
+		_injectBadge();
+		// Re-inject if Vue re-renders remove our node
+		if (_badgeInterval) clearInterval(_badgeInterval);
+		if (_activeBadgeCard) {
+			_badgeInterval = setInterval(() => {
+				if (!document.getElementById(BADGE_ID)) _injectBadge();
+			}, 1500);
+		}
+	}
+
+	/** Clear the badge (card released or session ended). */
+	function stopBadgeRefresh() {
+		_activeBadgeCard = null;
+		document.getElementById(BADGE_ID)?.remove();
+		if (_badgeInterval) { clearInterval(_badgeInterval); _badgeInterval = null; }
+	}
+
+	window._bcOpenPanel = openPanel;
 
 	function createPanel() {
 		if (_panel) return;
@@ -387,8 +493,10 @@
 		</div>`;
 
 		if (card.status === "Available") {
+			stopBadgeRefresh();
 			html += renderAssignForm(card.card_number);
 		} else if (card.status === "In Use") {
+			startBadgeRefresh(card);
 			html += renderFloorSelector();
 			html += renderItemsTable(card.items, card.grand_total);
 			html += renderInUseActions(card);
@@ -581,6 +689,7 @@
 			apiCall("scan_card", { card_number: cardNumber }, (refreshed) => {
 				_currentCard = refreshed;
 				renderCardContent(refreshed);
+				startBadgeRefresh(refreshed);
 			});
 		});
 	}
@@ -635,6 +744,7 @@
 							message: `Loaded ${data.items.length} item(s) into POS for ${data.invoice.customer_name}`,
 							indicator: "green",
 						});
+						startBadgeRefresh(_currentCard);
 						closePanel();
 					}
 				},
@@ -650,6 +760,7 @@
 				apiCall("release_card", { card_number: cardNumber }, (data) => {
 					frappe.show_alert({ message: data.message, indicator: "green" });
 					_currentCard = null;
+					stopBadgeRefresh();
 					document.getElementById("bc-content").innerHTML =
 						'<p class="bc-status-msg">Card released. Scan another card.</p>';
 					document.getElementById("bc-card-input").value = "";
@@ -798,10 +909,8 @@
 
 			frappe.pages["posapp"].on_page_hide = function (wrapper) {
 				if (existingHide) existingHide.call(this, wrapper);
-				// Remove FAB from previous session to keep DOM clean
-				document.getElementById(FAB_ID)?.remove();
-				_panel = null;
-				_overlay = null;
+				removeFAB();
+				stopBadgeRefresh();
 			};
 		} else {
 			// page_js ran before frappe.pages["posapp"] was created — use on_page_load timing
