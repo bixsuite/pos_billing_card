@@ -2,105 +2,145 @@
 
 Multi-floor retail token / billing card system for ERPNext 15 + POSAwesome.
 
+Customers carry a physical card through the showroom. Each floor adds items to the card. The cash counter loads all items and processes a single payment.
+
 ## Workflow
 
 ```
 Customer enters showroom
        │
        ▼
-Floor staff scans/enters card number in POSAwesome
-  → Card is "Available" → Assign to customer → Draft POS Invoice created
+Floor staff selects customer in POSAwesome Customer Details section
+  → Click the 💳 Billing Card button (appears at the right of the "Customer Details" heading)
+  → Scan or type card number → Card is "Available"
+  → Select floor → Click "Assign Card to Customer"
+  → Draft POS Invoice created and linked to card
        │
        ▼
 Staff adds items normally in POSAwesome
+  → Click "Save Current POS Items to Card"  (items stored in card's draft invoice)
+  → Optional: Click "Print Floor Slip"
+  → Customer takes card to next floor
        │
        ▼
-Click "Save Current POS Items to Card"  (items stored in draft invoice)
-  → Optional: Print Floor Slip
-       │
-       ▼
-Customer moves to next floor (shows card)
-  → Floor staff scans card → existing items load into POSAwesome
+Next floor — staff scans card
+  → Existing items from previous floors load automatically
   → More items added → Save to Card again
        │
        ▼
 Customer reaches Cash Counter
-  → Cashier scans card → all items from all floors load into POSAwesome
-  → Normal POSAwesome payment (cash / card / UPI / etc.)
-  → After payment: click "Release Card" → card is Available for next customer
+  → Cashier scans card → Click "Load Items into POS"
+  → All items from all floors appear in POSAwesome
+  → Process payment normally (cash / card / UPI / etc.)
+  → Card is auto-released on payment submission
+  → Or manually click "Release Card" if needed
 ```
 
 ## Installation
 
 ```bash
-# 1. Get the app (if not already cloned)
+# 1. Get the app
 bench get-app pos_billing_card https://github.com/bixsuite/pos_billing_card
 
-# 2. Install on site
-# This runs migrate (creates Billing Card doctype) and then applies fixtures
-# (custom fields on POS Invoice / Sales Invoice) via the after_install hook.
+# 2. Install on site (creates Billing Card doctype + applies custom field fixtures)
 bench --site <site> install-app pos_billing_card
 
-# 3. Clear cache and rebuild assets
-bench --site <site> clear-cache
+# 3. Build assets and clear cache
 bench build --app pos_billing_card
+bench --site <site> clear-cache
 ```
 
-> **Note:** Do not run `import-fixtures` manually before `install-app` — the
-> custom fields link to the Billing Card doctype, which must exist in the
-> database first. The `after_install` hook handles this automatically.
+> **Note:** Do not run `import-fixtures` manually before `install-app`. The custom fields
+> link to the Billing Card doctype, which must exist first. The `after_install` hook handles this.
 
-## Usage
+## Create Physical Cards
 
-### Create Physical Cards
+Go to **Billing Card** list → click **Bulk Create Cards** (toolbar button) to create cards from the UI.
 
-Go to **Billing Card** list and create cards manually, or use bulk creation from the terminal:
+Or from the terminal:
 
 ```bash
-# Creates BC-01 … BC-50, all status "Available"
-bench --site <site> execute pos_billing_card.api.billing_card_api.bulk_create_cards --args '{"count": 50, "prefix": "BC-"}'
+bench --site <site> execute pos_billing_card.api.billing_card_api.bulk_create_cards \
+  --args '{"count": 50, "prefix": "BC-"}'
 ```
 
 This creates BC-01 … BC-50 with status "Available".
 
+## Usage
+
 ### Floor Staff
 
 1. Open POSAwesome (`/app/posapp`)
-2. Click the **Billing Card** button (bottom-right corner)
-3. Scan or type card number → click **Scan**
-4. If card is **Available**: assign to customer (type name or use current POS customer)
-5. Add items in POSAwesome normally
-6. Click **Save Current POS Items to Card** to persist items
-7. Optionally click **Print Floor Slip**
-8. Customer takes card to next floor
+2. Select the customer in the **Customer Details** section
+3. Click the **💳 Billing Card** button (right side of the Customer Details heading)
+4. Scan or type the card number → click **Scan**
+5. If card is **Available**: select floor → click **Assign Card to Customer**
+6. Add items in POSAwesome normally
+7. Click **Save Current POS Items to Card** to persist items
+8. Optionally click **Print Floor Slip**
+9. Customer takes card to the next floor
 
 ### Next Floors
 
-Same as above — scan card → items load automatically → add more → save.
+Same as above — scan card → existing items load automatically → add more → save.
 
 ### Cash Counter
 
 1. Scan card → click **Load Items into POS**
 2. All items from all floors appear in POSAwesome
 3. Process payment normally in POSAwesome
-4. After submission, the card is **auto-released** (via doc event hook)
+4. Card is **auto-released** when the invoice is submitted
 5. Or manually click **Release Card** if needed
+
+### Invoice Management / Load Drafts
+
+If a cashier opens an existing draft invoice that already has a billing card linked, the **💳 Billing Card** badge in the Customer Details heading updates automatically to show the active card.
+
+## Applying Updates
+
+After pulling new code:
+
+```bash
+# Python-only changes
+bench --site <site> clear-cache
+
+# JS changes (always include build)
+bench build --app pos_billing_card
+bench --site <site> clear-cache
+
+# Schema changes
+bench --site <site> migrate
+bench build --app pos_billing_card
+bench --site <site> clear-cache
+```
 
 ## File Structure
 
 ```
 pos_billing_card/
 ├── pos_billing_card/
-│   ├── hooks.py                          # page_js + fixtures + doc_events
+│   ├── hooks.py                          # page_js + fixtures + doc_events + after_install
+│   ├── setup.py                          # after_install: reload_doc + sync_fixtures
 │   ├── modules.txt
-│   ├── doctype/billing_card/
-│   │   ├── billing_card.json             # DocType definition
-│   │   └── billing_card.py              # Controller (validate/rename guard)
+│   ├── pos_billing_card/
+│   │   └── doctype/billing_card/
+│   │       ├── billing_card.json         # DocType definition
+│   │       ├── billing_card.py           # Controller
+│   │       └── billing_card_list.js      # List view — Bulk Create Cards toolbar button
 │   ├── api/
-│   │   └── billing_card_api.py          # All whitelisted API endpoints
+│   │   └── billing_card_api.py           # All whitelisted API endpoints
 │   ├── fixtures/
-│   │   └── custom_field.json            # bc_billing_card + bc_floor on POS Invoice
+│   │   └── custom_field.json             # bc_billing_card + bc_floor on POS Invoice & Sales Invoice
 │   └── public/js/
-│       └── pos_billing_card_extension.js # POSAwesome FAB + slide panel UI
+│       └── pos_billing_card_extension.js # POSAwesome slide panel UI (injected via page_js)
 └── pyproject.toml
 ```
+
+## Custom Fields Added
+
+| Doctype | Field | Type | Purpose |
+|---|---|---|---|
+| POS Invoice | `bc_billing_card` | Link → Billing Card | Links invoice to card |
+| POS Invoice | `bc_floor` | Data | Floor where items were added |
+| Sales Invoice | `bc_billing_card` | Link → Billing Card | Visible in standard invoice list |
+| Sales Invoice | `bc_floor` | Data | Floor reference |

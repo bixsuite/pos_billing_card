@@ -51,8 +51,32 @@
 
 	/** Returns current customer code from POSAwesome's invoice store. */
 	function getCurrentPosaCustomer() {
-		const stores = getPosaStores();
-		return stores?.invoice?.invoiceDoc?.customer || null;
+		// 1. Iterate ALL pinia stores — only trust invoiceDoc.customer (not store.customer
+		//    which catches the POS Profile's default-customer field, usually empty)
+		try {
+			const pinia = document.querySelector(".main-section")?.__vue_app__
+				?.config?.globalProperties?.$pinia;
+			if (pinia?._s) {
+				for (const [, store] of pinia._s) {
+					const c = store?.invoiceDoc?.customer;
+					if (c && typeof c === "string") return c;
+				}
+			}
+		} catch (_) {}
+
+		// 2. DOM fallback — Vuetify v-combobox/v-autocomplete selection chip in the customer card
+		try {
+			const customerSection = document.querySelector(".invoice-section-card");
+			if (customerSection) {
+				const chip = customerSection.querySelector(
+					".v-select__selection-text, .v-combobox__selection, .v-chip__content, .v-autocomplete__selection"
+				);
+				const text = chip?.textContent?.trim();
+				if (text) return text;
+			}
+		} catch (_) {}
+
+		return null;
 	}
 
 	/** Returns the active POS Profile name from POSAwesome. */
@@ -300,60 +324,53 @@
 
 			.bc-status-msg { font-size: 12px; color: #78909c; text-align: center; padding: 20px; }
 
-			/* Customer section badge */
+			/* Make the Customer Details heading a flex row so our badge sits on the right */
+			.invoice-section-heading {
+				display: flex !important;
+				align-items: center !important;
+				flex-wrap: nowrap !important;
+			}
+
+			/* Customer section badge — lives inside .invoice-section-heading */
 			#${BADGE_ID} {
+				margin-left: auto;
 				display: flex;
 				align-items: center;
-				gap: 10px;
-				padding: 7px 12px;
-				margin: 8px 0 0 0;
-				background: #e3f2fd;
-				border-radius: 8px;
-				border-left: 3px solid #1565c0;
-				font-size: 13px;
-				flex-wrap: wrap;
+				gap: 6px;
+				flex-shrink: 0;
 			}
 			#${BADGE_ID} .bc-pb-card {
 				font-weight: 700;
 				color: #1565c0;
-				display: flex;
-				align-items: center;
-				gap: 4px;
-			}
-			#${BADGE_ID} .bc-pb-floor {
-				color: #546e7a;
 				font-size: 12px;
 				display: flex;
 				align-items: center;
 				gap: 3px;
-			}
-			#${BADGE_ID} .bc-pb-open {
-				margin-left: auto;
-				font-size: 11px;
-				color: #1565c0;
+				background: #e3f2fd;
+				padding: 3px 8px;
+				border-radius: 12px;
 				cursor: pointer;
-				text-decoration: underline;
-				white-space: nowrap;
 			}
-			#${BADGE_ID}.bc-pb-idle {
-				background: transparent;
-				border-left: none;
-				padding: 4px 0;
+			#${BADGE_ID} .bc-pb-floor {
+				color: #546e7a;
+				font-size: 11px;
 			}
-			#${BADGE_ID}.bc-pb-idle button {
+			/* Idle state — compact button aligned to heading right */
+			#${BADGE_ID} button {
 				background: #1565c0;
 				color: #fff;
 				border: none;
 				border-radius: 6px;
-				padding: 6px 14px;
-				font-size: 12.5px;
+				padding: 4px 12px;
+				font-size: 12px;
 				font-weight: 600;
 				cursor: pointer;
 				display: flex;
 				align-items: center;
-				gap: 6px;
+				gap: 5px;
+				white-space: nowrap;
 			}
-			#${BADGE_ID}.bc-pb-idle button:hover { background: #1976d2; }
+			#${BADGE_ID} button:hover { background: #1976d2; }
 		`;
 		document.head.appendChild(style);
 	}
@@ -373,13 +390,13 @@
 	let _activeBadgeCard = null;
 	let _badgeInterval = null;
 
-	/** Find the Customer Details card container in POSAwesome's rendered DOM. */
+	/** Find the Customer Details heading row in POSAwesome's rendered DOM. */
 	function findCustomerContainer() {
 		// POSAwesome renders: v-card.invoice-section-card > .invoice-section-heading > h3.invoice-section-heading__title
 		const headings = document.querySelectorAll("h3.invoice-section-heading__title");
 		for (const h of headings) {
 			if (h.textContent.trim() === __("Customer Details") || h.textContent.trim() === "Customer Details") {
-				return h.closest(".invoice-section-card") || h.closest(".v-card") || h.parentElement?.parentElement;
+				return h.parentElement; // .invoice-section-heading — inject button alongside the title
 			}
 		}
 		return null;
@@ -395,16 +412,13 @@
 
 		if (_activeBadgeCard) {
 			const card = _activeBadgeCard;
-			badge.className = "";
 			badge.innerHTML = `
-				<span class="bc-pb-card">&#x1F4B3; ${card.card_number}</span>
-				${card.current_floor ? `<span class="bc-pb-floor">&#x1F4CD; ${card.current_floor}</span>` : ""}
-				${card.customer_name ? `<span class="bc-pb-floor" style="color:#2e7d32">&#x1F464; ${card.customer_name}</span>` : ""}
-				<span class="bc-pb-open" onclick="window._bcOpenPanel()">Open &#x2197;</span>
+				<span class="bc-pb-card" onclick="window._bcOpenPanel()" title="Open Billing Card panel">
+					&#x1F4B3; ${frappe.utils.escape_html(card.card_number)}
+					${card.current_floor ? `<span class="bc-pb-floor">&#x2022; ${frappe.utils.escape_html(card.current_floor)}</span>` : ""}
+				</span>
 			`;
 		} else {
-			// Idle state — just show the assign button
-			badge.className = "bc-pb-idle";
 			badge.innerHTML = `
 				<button onclick="window._bcOpenPanel()">&#x1F4B3; Billing Card</button>
 			`;
@@ -593,17 +607,25 @@
 
 	function renderAssignForm(_cardNumber) {
 		const posCustomer = getCurrentPosaCustomer() || "";
+		const customerHtml = posCustomer
+			? `<div class="bc-form-group">
+				<label>Customer</label>
+				<div style="padding:9px 12px;background:#f1f8e9;border:1px solid #c5e1a5;border-radius:6px;font-size:13px;font-weight:600;color:#1b5e20;">
+					&#x2713; ${frappe.utils.escape_html(posCustomer)}
+				</div>
+				<small style="color:#546e7a;font-size:11px;">Customer selected in POSAwesome</small>
+			</div>`
+			: `<div style="background:#fff3e0;border:1px solid #ffcc80;border-radius:8px;padding:10px 14px;font-size:13px;color:#e65100;margin-bottom:8px;">
+				&#x26A0; No customer selected in POS App.<br>
+				<small>Please select a customer in the Customer Details section first, then assign the card.</small>
+			</div>`;
+
 		return `
 		<div class="bc-assign-form">
 			<p style="font-size:13px;color:#546e7a;margin:0 0 10px;">
-				This card is <b>available</b>. Assign it to a customer to start a new invoice.
+				This card is <b>available</b>. Assign it to the current POS customer.
 			</p>
-			<div class="bc-form-group">
-				<label>Customer *</label>
-				<input id="bc-customer-input" type="text" placeholder="Customer name or ID"
-					value="${frappe.utils.escape_html(posCustomer)}" />
-				${posCustomer ? `<small style="color:#2e7d32">&#x2713; Using current POS customer</small>` : ""}
-			</div>
+			${customerHtml}
 			<div class="bc-form-group">
 				<label>Floor</label>
 				<select id="bc-floor-assign">
@@ -615,11 +637,8 @@
 				</select>
 			</div>
 			<div class="bc-actions">
-				<button class="bc-btn bc-btn-primary" id="bc-assign-btn">
+				<button class="bc-btn bc-btn-primary" id="bc-assign-btn" ${!posCustomer ? "disabled" : ""}>
 					&#x2795; Assign Card to Customer
-				</button>
-				<button class="bc-btn bc-btn-outline" id="bc-assign-from-pos-btn">
-					&#x21E9; Assign &amp; Use Current POS Customer
 				</button>
 			</div>
 		</div>`;
@@ -704,29 +723,16 @@
 		const assignBtn = content.querySelector("#bc-assign-btn");
 		if (assignBtn) {
 			assignBtn.addEventListener("click", () => {
-				const customer = content.querySelector("#bc-customer-input")?.value?.trim();
+				const customer = getCurrentPosaCustomer();
 				const floor = content.querySelector("#bc-floor-assign")?.value || "Floor 1";
 				if (!customer) {
-					frappe.show_alert({ message: "Please enter a customer name.", indicator: "orange" });
-					return;
-				}
-				doAssignCard(card.card_number, customer, floor);
-			});
-		}
-
-		const assignFromPosBtn = content.querySelector("#bc-assign-from-pos-btn");
-		if (assignFromPosBtn) {
-			assignFromPosBtn.addEventListener("click", () => {
-				const posCustomer = getCurrentPosaCustomer();
-				if (!posCustomer) {
 					frappe.show_alert({
-						message: "No customer selected in POS. Please select a customer in POSAwesome first.",
+						message: "No customer selected in POSAwesome. Please select a customer in the Customer Details section first.",
 						indicator: "orange",
 					});
 					return;
 				}
-				const floor = content.querySelector("#bc-floor-assign")?.value || "Floor 1";
-				doAssignCard(card.card_number, posCustomer, floor);
+				doAssignCard(card.card_number, customer, floor);
 			});
 		}
 
@@ -765,10 +771,10 @@
 		apiCall("assign_card", { card_number: cardNumber, customer, pos_profile: posProfile, floor }, (data) => {
 			frappe.show_alert({ message: `Card ${cardNumber} assigned to ${data.customer_name || customer}`, indicator: "green" });
 
-			// Auto-load customer into POSAwesome
+			// Update current POSAwesome session invoice: customer + billing card link
 			const stores = getPosaStores();
 			if (stores?.invoice) {
-				stores.invoice.mergeInvoiceDoc({ customer });
+				stores.invoice.mergeInvoiceDoc({ customer, bc_billing_card: data.card });
 			}
 
 			// Refresh panel
@@ -826,6 +832,11 @@
 				() => {
 					const ok = loadIntoPos(data.invoice);
 					if (ok) {
+						// Stamp bc_billing_card on the session invoice so submit hook auto-releases the card
+						const st = getPosaStores();
+						if (st?.invoice) {
+							st.invoice.mergeInvoiceDoc({ bc_billing_card: card.card_number });
+						}
 						frappe.show_alert({
 							message: `Loaded ${data.items.length} item(s) into POS for ${data.invoice.customer_name}`,
 							indicator: "green",

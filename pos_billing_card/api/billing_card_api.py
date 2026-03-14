@@ -99,6 +99,7 @@ def assign_card(card_number, customer, pos_profile, floor=""):
 	invoice.bc_billing_card = card.name
 	invoice.bc_floor = floor or "Floor 1"
 	invoice.set_missing_values()
+	invoice.calculate_taxes_and_totals()
 	invoice.insert(ignore_permissions=True)
 
 	card.status = "In Use"
