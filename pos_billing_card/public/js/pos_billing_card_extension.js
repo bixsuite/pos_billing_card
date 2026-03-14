@@ -312,6 +312,25 @@
 				text-decoration: underline;
 				white-space: nowrap;
 			}
+			#${BADGE_ID}.bc-pb-idle {
+				background: transparent;
+				border-left: none;
+				padding: 4px 0;
+			}
+			#${BADGE_ID}.bc-pb-idle button {
+				background: #1565c0;
+				color: #fff;
+				border: none;
+				border-radius: 6px;
+				padding: 6px 14px;
+				font-size: 12.5px;
+				font-weight: 600;
+				cursor: pointer;
+				display: flex;
+				align-items: center;
+				gap: 6px;
+			}
+			#${BADGE_ID}.bc-pb-idle button:hover { background: #1976d2; }
 		`;
 		document.head.appendChild(style);
 	}
@@ -354,20 +373,29 @@
 
 	function _injectBadge() {
 		document.getElementById(BADGE_ID)?.remove();
-		if (!_activeBadgeCard) return;
-
 		const container = findCustomerContainer();
 		if (!container) return;
 
-		const card = _activeBadgeCard;
 		const badge = document.createElement("div");
 		badge.id = BADGE_ID;
-		badge.innerHTML = `
-			<span class="bc-pb-card">&#x1F4B3; ${card.card_number}</span>
-			${card.current_floor ? `<span class="bc-pb-floor">&#x1F4CD; ${card.current_floor}</span>` : ""}
-			${card.customer_name ? `<span class="bc-pb-floor" style="color:#2e7d32">&#x1F464; ${card.customer_name}</span>` : ""}
-			<span class="bc-pb-open" onclick="window._bcOpenPanel()">Open &#x2197;</span>
-		`;
+
+		if (_activeBadgeCard) {
+			const card = _activeBadgeCard;
+			badge.className = "";
+			badge.innerHTML = `
+				<span class="bc-pb-card">&#x1F4B3; ${card.card_number}</span>
+				${card.current_floor ? `<span class="bc-pb-floor">&#x1F4CD; ${card.current_floor}</span>` : ""}
+				${card.customer_name ? `<span class="bc-pb-floor" style="color:#2e7d32">&#x1F464; ${card.customer_name}</span>` : ""}
+				<span class="bc-pb-open" onclick="window._bcOpenPanel()">Open &#x2197;</span>
+			`;
+		} else {
+			// Idle state — just show the assign button
+			badge.className = "bc-pb-idle";
+			badge.innerHTML = `
+				<button onclick="window._bcOpenPanel()">&#x1F4B3; Billing Card</button>
+			`;
+		}
+
 		container.appendChild(badge);
 	}
 
@@ -375,23 +403,64 @@
 	function startBadgeRefresh(card) {
 		_activeBadgeCard = card && card.status === "In Use" ? card : null;
 		_injectBadge();
-		// Re-inject if Vue re-renders remove our node
-		if (_badgeInterval) clearInterval(_badgeInterval);
-		if (_activeBadgeCard) {
+		// Re-inject if Vue re-renders remove our node — keep interval always running
+		if (!_badgeInterval) {
 			_badgeInterval = setInterval(() => {
 				if (!document.getElementById(BADGE_ID)) _injectBadge();
 			}, 1500);
 		}
 	}
 
-	/** Clear the badge (card released or session ended). */
+	/** Clear active card badge back to idle button. */
 	function stopBadgeRefresh() {
 		_activeBadgeCard = null;
-		document.getElementById(BADGE_ID)?.remove();
-		if (_badgeInterval) { clearInterval(_badgeInterval); _badgeInterval = null; }
+		_injectBadge(); // re-inject idle button (don't stop interval)
 	}
 
 	window._bcOpenPanel = openPanel;
+
+	// -------------------------------------------------------------------------
+	// Invoice store watcher — syncs card when Load Drafts / Invoice Mgmt loads
+	// a different invoice that already has bc_billing_card set
+	// -------------------------------------------------------------------------
+
+	let _watchedInvoiceName = null;
+	let _watchedCardId = null;
+
+	function watchInvoiceStore() {
+		setInterval(() => {
+			const stores = getPosaStores();
+			const doc = stores?.invoice?.invoiceDoc;
+			if (!doc) return;
+
+			const invoiceName = doc.name || null;
+			const cardId = doc.bc_billing_card || null;
+
+			// Nothing changed
+			if (invoiceName === _watchedInvoiceName && cardId === _watchedCardId) return;
+
+			_watchedInvoiceName = invoiceName;
+			_watchedCardId = cardId;
+
+			if (cardId) {
+				// Invoice has a billing card — fetch and sync
+				apiCall("scan_card", { card_number: cardId }, (card) => {
+					_currentCard = card;
+					startBadgeRefresh(card);
+					// If panel is open, re-render it with the new card
+					if (_panel?.classList.contains("bc-open")) {
+						renderCardContent(card);
+						const input = _panel.querySelector("#bc-card-input");
+						if (input) input.value = card.card_number;
+					}
+				});
+			} else if (_watchedInvoiceName !== null) {
+				// Invoice changed and no card on it — clear
+				_currentCard = null;
+				stopBadgeRefresh();
+			}
+		}, 1500);
+	}
 
 	function createPanel() {
 		if (_panel) return;
@@ -509,6 +578,7 @@
 	}
 
 	function renderAssignForm(cardNumber) {
+		const posCustomer = getCurrentPosaCustomer() || "";
 		return `
 		<div class="bc-assign-form">
 			<p style="font-size:13px;color:#546e7a;margin:0 0 10px;">
@@ -516,7 +586,9 @@
 			</p>
 			<div class="bc-form-group">
 				<label>Customer *</label>
-				<input id="bc-customer-input" type="text" placeholder="Customer name or ID" />
+				<input id="bc-customer-input" type="text" placeholder="Customer name or ID"
+					value="${frappe.utils.escape_html(posCustomer)}" />
+				${posCustomer ? `<small style="color:#2e7d32">&#x2713; Using current POS customer</small>` : ""}
 			</div>
 			<div class="bc-form-group">
 				<label>Floor</label>
@@ -893,6 +965,8 @@
 		injectStyles();
 		waitForPosApp(() => {
 			injectFAB();
+			startBadgeRefresh(null); // inject idle button in customer section
+			watchInvoiceStore();
 		});
 	}
 
